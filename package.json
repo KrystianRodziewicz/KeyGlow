@@ -6,6 +6,14 @@
   "main": "electron/main.js",
   "author": "Krystian Rodziewicz",
   "license": "MIT",
+  "homepage": "https://krystianrodziewicz.github.io/KeyGlow/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KrystianRodziewicz/KeyGlow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KrystianRodziewicz/KeyGlow/issues"
+  },
   "keywords": [
     "nuphy",
     "halo75",
@@ -24,10 +32,10 @@
     "dist:store": "electron-builder --win appx",
     "dist:mac": "electron-builder --mac",
     "dist:linux": "electron-builder --linux",
-    "web": "npx --yes serve src"
+    "web": "npx --yes serve@14 src"
   },
   "build": {
-    "appId": "io.github.keyglow",
+    "appId": "io.github.krystianrodziewicz.keyglow",
     "productName": "KeyGlow",
     "directories": {
       "output": "dist"
@@ -94,7 +102,7 @@
       ],
       "icon": "build/icon.png",
       "category": "Utility",
-      "maintainer": "Krystian Rodziewicz",
+      "maintainer": "Krystian Rodziewicz <285813961+KrystianRodziewicz@users.noreply.github.com>",
       "synopsis": "Podświetlenie klawiatury NuPhy Halo75 V2",
       "extraResources": [
         {

@@ -5,11 +5,13 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   draft:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - run: gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "KeyGlow $GITHUB_REF_NAME" --generate-notes
         env:
@@ -17,6 +19,8 @@ jobs:
 
   build:
     needs: draft
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -29,8 +33,8 @@ jobs:
             target: --linux
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -48,8 +52,8 @@ jobs:
     if: vars.STORE_IDENTITY_NAME != ''
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -70,11 +74,13 @@ jobs:
 
   firmware-upload:
     needs: firmware
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: firmware
-      - run: gh release upload "$GITHUB_REF_NAME" keyglow-halo75-v2-ansi.bin --repo "$GITHUB_REPOSITORY" --clobber
+      - run: gh release upload "$GITHUB_REF_NAME" keyglow-halo75-v2-ansi.bin keyglow-halo75-v2-ansi.bin.sha256 --repo "$GITHUB_REPOSITORY" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -234,7 +234,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', showWindow);
 
   app.whenReady().then(() => {
-    if (process.platform === 'win32') app.setAppUserModelId('io.github.keyglow');
+    if (process.platform === 'win32') app.setAppUserModelId('io.github.krystianrodziewicz.keyglow');
     Menu.setApplicationMenu(isMac ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]) : null);
     setupHid();
 

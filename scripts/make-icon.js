@@ -19,6 +19,26 @@ const ICONS = [
   ['build/appx/LargeTile.png', 310, 310, 0.22],
   ...[16, 24, 32, 48, 256].map(n => [`build/appx/Square44x44Logo.targetsize-${n}_altform-unplated.png`, n, n, 0]),
 ];
+const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
+
+function ico(images) {
+  const head = Buffer.alloc(6 + 16 * images.length);
+  head.writeUInt16LE(0, 0);
+  head.writeUInt16LE(1, 2);
+  head.writeUInt16LE(images.length, 4);
+  let offset = head.length;
+  images.forEach(({ size, png }, i) => {
+    const at = 6 + 16 * i;
+    head.writeUInt8(size >= 256 ? 0 : size, at);
+    head.writeUInt8(size >= 256 ? 0 : size, at + 1);
+    head.writeUInt16LE(1, at + 4);
+    head.writeUInt16LE(32, at + 6);
+    head.writeUInt32LE(png.length, at + 8);
+    head.writeUInt32LE(offset, at + 12);
+    offset += png.length;
+  });
+  return Buffer.concat([head, ...images.map(x => x.png)]);
+}
 
 function render(icons, logo) {
   return new Promise((resolve, reject) => {
@@ -46,12 +66,15 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, webPreferences: { offscreen: true } });
   await win.loadURL('data:text/html,<html><body></body></html>');
   const logo = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
-  const images = await win.webContents.executeJavaScript(`(${render})(${JSON.stringify(ICONS)}, ${JSON.stringify(logo)})`);
+  const all = [...ICONS, ...ICO_SIZES.map(n => ['', n, n, 0])];
+  const images = await win.webContents.executeJavaScript(`(${render})(${JSON.stringify(all)}, ${JSON.stringify(logo)})`);
   ICONS.forEach(([file], i) => {
     const out = path.join(root, file);
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, Buffer.from(images[i].split(',')[1], 'base64'));
   });
-  console.log(`${ICONS.length} ikon gotowych`);
+  const icoImages = ICO_SIZES.map((size, i) => ({ size, png: Buffer.from(images[ICONS.length + i].split(',')[1], 'base64') }));
+  fs.writeFileSync(path.join(root, 'build', 'icon.ico'), ico(icoImages));
+  console.log(`${ICONS.length + 1} ikon gotowych`);
   app.quit();
 });
