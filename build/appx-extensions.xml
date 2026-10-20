@@ -1,0 +1,3 @@
+        <desktop:Extension Category="windows.startupTask" Executable="app\KeyGlow.exe" EntryPoint="Windows.FullTrustApplication" xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10" uap10:Parameters="--hidden">
+          <desktop:StartupTask TaskId="KeyGlowStartup" Enabled="true" DisplayName="KeyGlow" />
+        </desktop:Extension>

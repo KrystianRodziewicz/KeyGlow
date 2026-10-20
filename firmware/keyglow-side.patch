@@ -1,0 +1,422 @@
+diff --git a/keyboards/nuphy/halo75_v2/ansi/ansi.c b/keyboards/nuphy/halo75_v2/ansi/ansi.c
+index 8e01b95..76f7561 100644
+--- a/keyboards/nuphy/halo75_v2/ansi/ansi.c
++++ b/keyboards/nuphy/halo75_v2/ansi/ansi.c
+@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ 
+ 
+ user_config_t user_config;  
++_Static_assert(sizeof(user_config_t) == (EECONFIG_USER_DATA_SIZE), "user_config_t must be EECONFIG_USER_DATA_SIZE bytes");
+ DEV_INFO_STRUCT dev_info =
+     {
+         .rf_baterry = 100,
+@@ -96,6 +97,11 @@ extern void side_colour_control(uint8_t dir);
+ extern void side_mode_a_control(uint8_t dir);
+ extern void side_mode_b_control(uint8_t dir);
+ extern bool low_bat_flag;
++extern uint8_t side_play_point;
++extern bool f_charging;
++extern void side_set_custom_colour(uint8_t r, uint8_t g, uint8_t b);
++extern void side_get_custom_colour(uint8_t *rgb);
++extern void side_sanitize(void);
+ 
+ 
+ /**
+@@ -726,6 +732,11 @@ void m_londing_eeprom_data(void)
+         user_config.ee_side_speed           = side_speed;
+         user_config.ee_side_rgb             = side_rgb;
+         user_config.ee_side_colour          = side_colour;
++        user_config.ee_side_custom_r        = 0xff;
++        user_config.ee_side_custom_g        = 0xff;
++        user_config.ee_side_custom_b        = 0xff;
++        user_config.ee_reserved             = 0;
++        side_set_custom_colour(0xff, 0xff, 0xff);
+         f_dev_sleep_enable                  = true;
+         eeconfig_update_user_datablock(&user_config);  
+     } else {
+@@ -735,6 +746,8 @@ void m_londing_eeprom_data(void)
+         side_speed  = user_config.ee_side_speed;
+         side_rgb    = user_config.ee_side_rgb;
+         side_colour = user_config.ee_side_colour;
++        side_set_custom_colour(user_config.ee_side_custom_r, user_config.ee_side_custom_g, user_config.ee_side_custom_b);
++        side_sanitize();
+     }
+ }
+ 
+@@ -791,3 +804,193 @@ void housekeeping_task_kb(void)
+     Sleep_Handle();
+ 
+ }
++
++#ifdef VIA_ENABLE
++enum keyglow_value_id {
++    KG_ID_PROBE       = 0x00,
++    KG_ID_SIDE_MODE_A = 0x01,
++    KG_ID_SIDE_MODE_B = 0x02,
++    KG_ID_SIDE_LIGHT  = 0x03,
++    KG_ID_SIDE_SPEED  = 0x04,
++    KG_ID_SIDE_RGB    = 0x05,
++    KG_ID_SIDE_COLOUR = 0x06,
++    KG_ID_SIDE_CUSTOM = 0x07,
++    KG_ID_SIDE_ALL    = 0x10,
++    KG_ID_BATTERY     = 0x20,
++    KG_ID_CHARGE      = 0x21,
++    KG_ID_LINK        = 0x22,
++    KG_ID_STATUS      = 0x2F,
++};
++#define KG_PROTOCOL_VERSION 1
++#define KG_MAX_VALUE_LEN    9
++
++static bool kg_is_writable(uint8_t id)
++{
++    return (id >= KG_ID_SIDE_MODE_A && id <= KG_ID_SIDE_CUSTOM) || id == KG_ID_SIDE_ALL;
++}
++
++static bool kg_get_value(uint8_t id, uint8_t *v)
++{
++    switch (id) {
++        case KG_ID_PROBE:
++            v[0] = 'K';
++            v[1] = 'G';
++            v[2] = KG_PROTOCOL_VERSION;
++            break;
++        case KG_ID_SIDE_MODE_A: v[0] = side_mode_a; break;
++        case KG_ID_SIDE_MODE_B: v[0] = side_mode_b; break;
++        case KG_ID_SIDE_LIGHT:  v[0] = side_light;  break;
++        case KG_ID_SIDE_SPEED:  v[0] = side_speed;  break;
++        case KG_ID_SIDE_RGB:    v[0] = side_rgb;    break;
++        case KG_ID_SIDE_COLOUR: v[0] = side_colour; break;
++        case KG_ID_SIDE_CUSTOM: side_get_custom_colour(&v[0]); break;
++        case KG_ID_SIDE_ALL:
++            v[0] = side_mode_a;
++            v[1] = side_mode_b;
++            v[2] = side_light;
++            v[3] = side_speed;
++            v[4] = side_rgb;
++            v[5] = side_colour;
++            side_get_custom_colour(&v[6]);
++            break;
++        case KG_ID_BATTERY:
++            v[0] = dev_info.rf_baterry;
++            break;
++        case KG_ID_CHARGE:
++            v[0] = dev_info.rf_charge;
++            v[1] = f_charging;
++            break;
++        case KG_ID_LINK:
++            v[0] = dev_info.link_mode;
++            v[1] = dev_info.rf_state;
++            v[2] = dev_info.rf_channel;
++            v[3] = dev_info.ble_channel;
++            break;
++        case KG_ID_STATUS:
++            v[0] = dev_info.rf_baterry;
++            v[1] = dev_info.rf_charge;
++            v[2] = dev_info.link_mode;
++            v[3] = dev_info.rf_state;
++            v[4] = dev_info.sys_sw_state;
++            v[5] = low_bat_flag;
++            v[6] = f_dev_sleep_enable;
++            break;
++        default:
++            return false;
++    }
++    return true;
++}
++
++static bool kg_set_value(uint8_t id, const uint8_t *v)
++{
++    switch (id) {
++        case KG_ID_SIDE_MODE_A:
++            if (v[0] > 4) return false;
++            if (v[0] != side_mode_a) side_play_point = 0;
++            side_mode_a = v[0];
++            break;
++        case KG_ID_SIDE_MODE_B:
++            if (v[0] > 6) return false;
++            if (v[0] != side_mode_b) side_play_point = 0;
++            side_mode_b = v[0];
++            break;
++        case KG_ID_SIDE_LIGHT:
++            if (v[0] > 4) return false;
++            side_light = v[0];
++            break;
++        case KG_ID_SIDE_SPEED:
++            if (v[0] > 4) return false;
++            side_speed = v[0];
++            break;
++        case KG_ID_SIDE_RGB:
++            if (v[0] > 1) return false;
++            if (v[0] != side_rgb) side_play_point = 0;
++            side_rgb = v[0];
++            break;
++        case KG_ID_SIDE_COLOUR:
++            if (v[0] > SIDE_COLOUR_CUSTOM) return false;
++            if (side_rgb) side_play_point = 0;
++            side_colour = v[0];
++            side_rgb    = 0;
++            break;
++        case KG_ID_SIDE_CUSTOM:
++            side_set_custom_colour(v[0], v[1], v[2]);
++            break;
++        case KG_ID_SIDE_ALL:
++            if (v[0] > 4 || v[1] > 6 || v[2] > 4 || v[3] > 4 || v[4] > 1 || v[5] > SIDE_COLOUR_CUSTOM) return false;
++            if (v[0] != side_mode_a || v[1] != side_mode_b || v[4] != side_rgb) side_play_point = 0;
++            side_mode_a = v[0];
++            side_mode_b = v[1];
++            side_light  = v[2];
++            side_speed  = v[3];
++            side_rgb    = v[4];
++            side_colour = v[5];
++            side_set_custom_colour(v[6], v[7], v[8]);
++            break;
++        default:
++            return false;
++    }
++
++    if (low_bat_flag && side_light > 1) side_light = 1;
++    side_sanitize();
++    return true;
++}
++
++static void kg_store_side(void)
++{
++    uint8_t rgb[3];
++
++    side_get_custom_colour(rgb);
++    user_config.ee_side_mode_a   = side_mode_a;
++    user_config.ee_side_mode_b   = side_mode_b;
++    if (!low_bat_flag || side_light == 0) user_config.ee_side_light = side_light;
++    user_config.ee_side_speed    = side_speed;
++    user_config.ee_side_rgb      = side_rgb;
++    user_config.ee_side_colour   = side_colour;
++    user_config.ee_side_custom_r = rgb[0];
++    user_config.ee_side_custom_g = rgb[1];
++    user_config.ee_side_custom_b = rgb[2];
++}
++
++void via_custom_value_command_kb(uint8_t *data, uint8_t length)
++{
++    uint8_t *command_id = &(data[0]);
++    uint8_t  channel_id = data[1];
++    uint8_t  value_id   = data[2];
++    uint8_t *value_data = &(data[3]);
++
++    if (channel_id != id_custom_channel || length < 3 + KG_MAX_VALUE_LEN) {
++        *command_id = id_unhandled;
++        return;
++    }
++
++    switch (*command_id) {
++        case id_custom_set_value:
++            if (kg_set_value(value_id, value_data)) {
++                kg_get_value(value_id, value_data);
++            } else {
++                *command_id = id_unhandled;
++            }
++            break;
++
++        case id_custom_get_value:
++            if (!kg_get_value(value_id, value_data)) {
++                *command_id = id_unhandled;
++            }
++            break;
++
++        case id_custom_save:
++            if (kg_is_writable(value_id)) {
++                kg_store_side();
++                eeconfig_update_user_datablock(&user_config);
++            } else {
++                *command_id = id_unhandled;
++            }
++            break;
++
++        default:
++            *command_id = id_unhandled;
++            break;
++    }
++}
++#endif
+diff --git a/keyboards/nuphy/halo75_v2/ansi/ansi.h b/keyboards/nuphy/halo75_v2/ansi/ansi.h
+index 9a2c393..c1b8ad0 100644
+--- a/keyboards/nuphy/halo75_v2/ansi/ansi.h
++++ b/keyboards/nuphy/halo75_v2/ansi/ansi.h
+@@ -200,7 +200,14 @@ typedef struct
+     uint8_t ee_side_rgb;
+     uint8_t ee_side_colour;
+     m_8bit ee_dev_config;
++    uint8_t ee_side_custom_r;
++    uint8_t ee_side_custom_g;
++    uint8_t ee_side_custom_b;
++    uint8_t ee_reserved;
+ } user_config_t;
+ 
++#define SIDE_COLOUR_CUSTOM      8
++#define SIDE_NEW_COLOUR_MAX     3
++
+ extern user_config_t user_config;
+ #define f_dev_sleep_enable  user_config.ee_dev_config.bit0
+\ No newline at end of file
+diff --git a/keyboards/nuphy/halo75_v2/ansi/keymaps/via/NuPhy Halo75 via3.json b/keyboards/nuphy/halo75_v2/ansi/keymaps/via/NuPhy Halo75 via3.json
+index b312b2e..b80f59a 100644
+--- a/keyboards/nuphy/halo75_v2/ansi/keymaps/via/NuPhy Halo75 via3.json	
++++ b/keyboards/nuphy/halo75_v2/ansi/keymaps/via/NuPhy Halo75 via3.json	
+@@ -93,6 +93,58 @@
+ 				"content": ["id_qmk_rgb_matrix_color", 3, 4]
+ 			}
+ 		  ]
++		},
++		{
++			"label": "Sidelight",
++			"content": [
++			{
++				"label": "Segments",
++				"type": "dropdown",
++				"options": ["Off", "Preset 1", "Preset 2", "All", "Preset 4", "Preset 5", "Preset 6"],
++				"content": ["id_kg_side_mode_b", 0, 2]
++			},
++			{
++				"showIf": "{id_kg_side_mode_b} != 0",
++				"label": "Effect",
++				"type": "dropdown",
++				"options": ["Wave", "Spectrum", "Dual colour flow", "Breathing", "Static"],
++				"content": ["id_kg_side_mode_a", 0, 1]
++			},
++			{
++				"showIf": "{id_kg_side_mode_b} != 0",
++				"label": "Brightness",
++				"type": "range",
++				"options": [0, 4],
++				"content": ["id_kg_side_light", 0, 3]
++			},
++			{
++				"showIf": "{id_kg_side_mode_b} != 0 && {id_kg_side_mode_a} != 4",
++				"label": "Speed (0 = fastest)",
++				"type": "range",
++				"options": [0, 4],
++				"content": ["id_kg_side_speed", 0, 4]
++			},
++			{
++				"showIf": "{id_kg_side_mode_b} != 0 && ({id_kg_side_mode_a} == 0 || {id_kg_side_mode_a} == 3)",
++				"label": "Rainbow / colour cycle",
++				"type": "toggle",
++				"content": ["id_kg_side_rgb", 0, 5]
++			},
++			{
++				"showIf": "{id_kg_side_mode_b} != 0 && {id_kg_side_mode_a} != 1 && {id_kg_side_mode_a} != 2",
++				"label": "Colour",
++				"type": "dropdown",
++				"options": ["Red", "Orange", "Yellow", "Green", "Cyan", "Blue", "Purple", "Pink", "Custom"],
++				"content": ["id_kg_side_colour", 0, 6]
++			},
++			{
++				"showIf": "{id_kg_side_mode_b} != 0 && {id_kg_side_mode_a} == 2",
++				"label": "Colour pair",
++				"type": "dropdown",
++				"options": ["Pair 1", "Pair 2", "Pair 3"],
++				"content": ["id_kg_side_colour", 0, 6]
++			}
++			]
+ 		}
+ 		]
+ 	}
+diff --git a/keyboards/nuphy/halo75_v2/ansi/side.c b/keyboards/nuphy/halo75_v2/ansi/side.c
+index 1f545e8..e48e0e6 100644
+--- a/keyboards/nuphy/halo75_v2/ansi/side.c
++++ b/keyboards/nuphy/halo75_v2/ansi/side.c
+@@ -287,6 +287,39 @@ void side_mode_b_control(uint8_t dir)
+     eeconfig_update_user_datablock(&user_config);
+ }
+ 
++void side_set_custom_colour(uint8_t r, uint8_t g, uint8_t b)
++{
++    colour_lib[SIDE_COLOUR_CUSTOM][0] = r;
++    colour_lib[SIDE_COLOUR_CUSTOM][1] = g;
++    colour_lib[SIDE_COLOUR_CUSTOM][2] = b;
++
++    colour_lib_1[SIDE_COLOUR_CUSTOM][0] = (uint8_t)(((uint16_t)r * 0x70) / 0xff);
++    colour_lib_1[SIDE_COLOUR_CUSTOM][1] = (uint8_t)(((uint16_t)g * 0x70) / 0xff);
++    colour_lib_1[SIDE_COLOUR_CUSTOM][2] = (uint8_t)(((uint16_t)b * 0x70) / 0xff);
++}
++
++void side_get_custom_colour(uint8_t *rgb)
++{
++    rgb[0] = colour_lib[SIDE_COLOUR_CUSTOM][0];
++    rgb[1] = colour_lib[SIDE_COLOUR_CUSTOM][1];
++    rgb[2] = colour_lib[SIDE_COLOUR_CUSTOM][2];
++}
++
++void side_sanitize(void)
++{
++    if (side_mode_a > SIDE_STATIC)    side_mode_a = SIDE_WAVE;
++    if (side_mode_b > SIDE_MODE_7)    side_mode_b = SIDE_MODE_4;
++    if (side_light > 4)               side_light  = 2;
++    if (side_speed > LIGHT_SPEED_MAX) side_speed  = LIGHT_SPEED_MAX / 2;
++    if (side_rgb > 1)                 side_rgb    = 1;
++
++    if (side_mode_a == SIDE_NEW) {
++        if (side_colour >= SIDE_NEW_COLOUR_MAX) side_colour = 0;
++    } else if (side_colour > SIDE_COLOUR_CUSTOM) {
++        side_colour = 0;
++    }
++}
++
+ /**
+  * @brief  set left side leds.
+  * @param  ...
+@@ -1014,7 +1047,13 @@ void bat_led_show(void)
+                 side_light = 1;
+             }
+         }
+-        else low_bat_flag = 0;
++        else {
++            if (low_bat_flag) {
++                side_light = user_config.ee_side_light;
++                side_sanitize();
++            }
++            low_bat_flag = 0;
++        }
+     }
+     if (f_bat_hold || bat_show_flag) {
+         bat_percent_led(bat_percent);
+@@ -1051,6 +1090,7 @@ void device_reset_init(void)
+     side_rgb        = 1;
+     side_colour     = 0;
+     side_play_point = 0;
++    side_set_custom_colour(0xff, 0xff, 0xff);
+ 
+     side_play_cnt   = 0;
+     side_play_timer = timer_read32();
+@@ -1069,6 +1109,10 @@ void device_reset_init(void)
+     user_config.ee_side_speed           = side_speed;
+     user_config.ee_side_rgb             = side_rgb;
+     user_config.ee_side_colour          = side_colour;
++    user_config.ee_side_custom_r        = 0xff;
++    user_config.ee_side_custom_g        = 0xff;
++    user_config.ee_side_custom_b        = 0xff;
++    user_config.ee_reserved             = 0;
+     f_dev_sleep_enable                  = true;
+     eeconfig_update_user_datablock(&user_config);
+ }
+diff --git a/keyboards/nuphy/halo75_v2/ansi/side.h b/keyboards/nuphy/halo75_v2/ansi/side.h
+index 275b9d8..a991fee 100644
+--- a/keyboards/nuphy/halo75_v2/ansi/side.h
++++ b/keyboards/nuphy/halo75_v2/ansi/side.h
+@@ -300,7 +300,7 @@ const uint8_t dual_colour_lib[3][6] =
+ 
+ };
+ 
+-const uint8_t colour_lib[9][3] =
++uint8_t colour_lib[9][3] =
+ {
+ 	{0xff, 0x00, 0x00},		   
+ 	{0xff, 0x20, 0x00},       
+@@ -312,7 +312,7 @@ const uint8_t colour_lib[9][3] =
+ 	{0xff, 0xa0, 0xa0},     
+ 	{0x00, 0x00, 0x00},      
+ };
+-const uint8_t colour_lib_1[9][3] =
++uint8_t colour_lib_1[9][3] =
+ {
+ 	{0x70, 0x00, 0x00},		
+ 	{0x70, 0x20, 0x00},    

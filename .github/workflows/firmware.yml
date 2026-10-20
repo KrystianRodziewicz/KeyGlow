@@ -1,0 +1,37 @@
+name: Firmware
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [main]
+    paths: ['firmware/keyglow-side.patch', '.github/workflows/firmware.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Kod NuPhy z SignalRGB
+        run: |
+          git config --global --add safe.directory '*'
+          git clone https://github.com/SRGBmods/NuphyQMK.git qmk
+          cd qmk
+          git checkout 1ef99a7d83c10b747c0aa118540affaf5c5f8af5
+          git submodule update --init --recursive
+      - name: Budowanie
+        working-directory: qmk
+        run: |
+          git apply ../firmware/keyglow-side.patch
+          export QMK_HOME="$PWD"
+          make nuphy/halo75_v2/ansi:via
+          cp nuphy_halo75_v2_ansi_via.bin ../keyglow-halo75-v2-ansi.bin
+          sha256sum ../keyglow-halo75-v2-ansi.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: keyglow-halo75-v2-ansi.bin

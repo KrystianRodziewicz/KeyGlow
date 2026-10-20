@@ -1,0 +1,119 @@
+{
+  "name": "keyglow",
+  "productName": "KeyGlow",
+  "version": "1.0.0",
+  "description": "Prosta apka do zmiany podświetlenia w klawiaturze NuPhy Halo75 V2.",
+  "main": "electron/main.js",
+  "author": "Krystian Rodziewicz",
+  "license": "MIT",
+  "keywords": [
+    "nuphy",
+    "halo75",
+    "rgb",
+    "qmk",
+    "via",
+    "webhid",
+    "electron",
+    "keyboard"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "icon": "electron scripts/make-icon.js",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:store": "electron-builder --win appx",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux",
+    "web": "npx --yes serve src"
+  },
+  "build": {
+    "appId": "io.github.keyglow",
+    "productName": "KeyGlow",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**",
+      "src/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "KeyGlow-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "KeyGlow-${version}-portable.exe"
+    },
+    "appx": {
+      "applicationId": "KeyGlow",
+      "displayName": "KeyGlow",
+      "publisherDisplayName": "Krystian Rodziewicz",
+      "backgroundColor": "#131f24",
+      "languages": [
+        "pl-PL",
+        "en-US"
+      ],
+      "minVersion": "10.0.19041.0",
+      "customExtensionsPath": "build/appx-extensions.xml",
+      "maxVersionTested": "10.0.26100.0",
+      "artifactName": "KeyGlow-${version}-store.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.utilities",
+      "identity": "-",
+      "minimumSystemVersion": "13.0",
+      "extendInfo": {
+        "NSBluetoothAlwaysUsageDescription": "KeyGlow odczytuje poziom baterii klawiatury przez Bluetooth."
+      }
+    },
+    "dmg": {
+      "artifactName": "KeyGlow-${version}-${arch}.dmg"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Utility",
+      "maintainer": "Krystian Rodziewicz",
+      "synopsis": "Podświetlenie klawiatury NuPhy Halo75 V2",
+      "extraResources": [
+        {
+          "from": "build/linux/50-keyglow.rules",
+          "to": "50-keyglow.rules"
+        }
+      ]
+    },
+    "appImage": {
+      "artifactName": "KeyGlow-${version}.AppImage"
+    },
+    "deb": {
+      "artifactName": "keyglow_${version}_${arch}.deb",
+      "afterInstall": "build/linux/after-install.tpl",
+      "afterRemove": "build/linux/after-remove.tpl"
+    }
+  },
+  "devDependencies": {
+    "electron": "44.9.1",
+    "electron-builder": "26.15.3"
+  }
+}

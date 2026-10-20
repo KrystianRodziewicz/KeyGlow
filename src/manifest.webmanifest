@@ -1,0 +1,16 @@
+{
+  "name": "KeyGlow",
+  "short_name": "KeyGlow",
+  "description": "Podświetlenie klawiatury NuPhy Halo75 V2.",
+  "lang": "pl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#131f24",
+  "theme_color": "#131f24",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

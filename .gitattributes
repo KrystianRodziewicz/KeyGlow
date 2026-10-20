@@ -1,0 +1,9 @@
+* text=auto
+*.sh text eol=lf
+*.tpl text eol=lf
+*.rules text eol=lf
+*.png binary
+*.ico binary
+*.woff2 binary
+*.bin binary
+*.patch text eol=lf
